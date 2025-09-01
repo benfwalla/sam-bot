@@ -1,0 +1,64 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual envs
+.venv/
+venv/
+env/
+.python-version
+
+# Packaging / build
+build/
+dist/
+wheelhouse/
+*.egg-info/
+.eggs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / caches
+*.log
+logs/
+.cache/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Node-style (in case of frontend additions)
+node_modules/
+
+# Data dumps
+*.sqlite3
+*.db
+*.dump
+*.sql
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+# If you generate artifacts locally, ignore them here
+# artifacts/
