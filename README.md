@@ -10,3 +10,6 @@ The embedding/chunking is custom and kept simple on purpose for this demo. `ask.
 - `src/ask.py` — quick CLI to query the RAG (retrieve + answer with sources).
 - `src/util.py` — helpers for DB (Supabase Postgres), Firecrawl session, chunking, and embeddings.
 - `.env.example` — variables needed (`FIRECRAWL_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_DB_URL`, etc.).
+
+## Supabase Schema:
+![schema.png](schema.png)
