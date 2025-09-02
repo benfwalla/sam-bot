@@ -1,12 +1,16 @@
 import os, sys
-import psycopg
 from dotenv import load_dotenv
 from openai import OpenAI
+from supabase import create_client, Client
 
 load_dotenv()
-DB = os.environ["SUPABASE_DB_URL"]
-STATE = os.environ.get("STATE", "NJ")
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_ANON_KEY"]
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
+STATE = "CT"
 
 SYS = (
     "You are SAMBOT. Answer strictly from the provided passages. "
@@ -15,48 +19,70 @@ SYS = (
 
 def rewrite_query(q: str) -> str:
     """Use GPT to rewrite the query into a clearer search query for compliance/provider manuals."""
-    print(f"[rewrite] Original query: {q}")
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         messages=[
             {"role": "system", "content": "Rewrite the user's query into a precise, domain-specific search query for regulatory/provider manuals. Avoid answering; only rewrite."},
             {"role": "user", "content": q}
         ],
         temperature=0
     )
-    rewritten = resp.choices[0].message.content.strip()
-    print(f"[rewrite] Rewritten query: {rewritten}")
-    return rewritten
+    return resp.choices[0].message.content.strip()
 
 def embed(q: str):
-    print(f"[embed] Embedding query: {q[:60]}{'...' if len(q) > 60 else ''}")
     return client.embeddings.create(
         model="text-embedding-3-small", input=q
     ).data[0].embedding
 
 def retrieve(vec, state=STATE, k=24):
-    print(f"[db] Retrieving top {k} rows for state={state}")
-    with psycopg.connect(DB) as con, con.cursor() as cur:
-        cur.execute("""
-          SELECT d.url,
-                 COALESCE(d.title,''),
-                 c.text,
-                 c.page_num
-          FROM chunks c
-          JOIN documents d ON d.doc_id = c.doc_id
-          WHERE d.state = %s
-          ORDER BY c.embedding <=> %s::vector
-          LIMIT %s
-        """, (state, vec, k))
-        rows = cur.fetchall()
-        print(f"[db] Retrieved {len(rows)} rows")
-        return rows
+    # Try vector search first
+    try:
+        result = supabase.rpc('match_chunks', {
+            'query_embedding': vec,
+            'match_state': state,
+            'match_count': k
+        }).execute()
+        
+        if result.data and len(result.data) > 0:
+            rows = []
+            for chunk in result.data:
+                rows.append((
+                    chunk.get('url', ''),
+                    chunk.get('title', ''),
+                    chunk.get('text', ''),
+                    chunk.get('page_num')
+                ))
+            return rows
+    except:
+        pass
+    
+    # Fallback to regular query
+    result = supabase.table('chunks') \
+        .select('text, page_num, heading, documents!inner(url, title)') \
+        .eq('documents.state', state) \
+        .limit(k) \
+        .execute()
+    
+    rows = []
+    for chunk in result.data:
+        doc = chunk.get('documents', {})
+        rows.append((
+            doc.get('url', ''),
+            doc.get('title', ''),
+            chunk.get('text', ''),
+            chunk.get('page_num')
+        ))
+    
+    return rows
 
 def answer(q: str, state=STATE):
     # Step 1: Rewrite
+    print(f"Original query: {q}")
     rewritten = rewrite_query(q)
+    print(f"New query: {rewritten}")
 
     # Step 2: Embed rewritten query
+    print("Vectorizing...")
     v = embed(rewritten)
 
     # Step 3: Retrieve context
@@ -76,11 +102,10 @@ def answer(q: str, state=STATE):
         "\n\nWrite only the answer."
     )
 
-    print("[llm] Sending to GPT for final answer")
+    print("Sending to LLM")
     chat = client.chat.completions.create(
         model="gpt-4.1-mini",
-        messages=[{"role": "system", "content": SYS},
-                  {"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0
     )
 

@@ -3,3 +3,5 @@ requests
 psycopg[binary]
 openai
 tiktoken
+firecrawl
+supabase
